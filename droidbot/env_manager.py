@@ -350,22 +350,22 @@ class StaticEnvFactory(AppEnvFactory):
         generate app-specific envs
         """
         envs = []
-        permissions = self.app.permissions
-        if 'android.permission.READ_CONTACTS' in permissions:
-            envs.append(ContactAppEnv())
-        if 'android.permission.READ_CALL_LOG' in permissions:
-            envs.append(CallLogEnv())
-            envs.append(CallLogEnv(call_in=False))
-            envs.append(CallLogEnv(accepted=False))
-        if 'android.permission.ACCESS_FINE_LOCATION' in permissions:
-            envs.append(GPSAppEnv())
-        if 'android.permission.READ_SMS' in permissions:
-            envs.append(SMSLogEnv())
-            envs.append(SMSLogEnv(sms_in=False))
-        if 'android.permission.READ_EXTERNAL_STORAGE' in permissions \
-                or 'android.permission.WRITE_EXTERNAL_STORAGE' in permissions \
-                or 'android.permission.MOUNT_UNMOUNT_FILESYSTEMS' in permissions:
-            envs.append(DummyFilesEnv())
+        # permissions = self.app.permissions
+        # if 'android.permission.READ_CONTACTS' in permissions:
+        #     envs.append(ContactAppEnv())
+        # if 'android.permission.READ_CALL_LOG' in permissions:
+        #     envs.append(CallLogEnv())
+        #     envs.append(CallLogEnv(call_in=False))
+        #     envs.append(CallLogEnv(accepted=False))
+        # if 'android.permission.ACCESS_FINE_LOCATION' in permissions:
+        #     envs.append(GPSAppEnv())
+        # if 'android.permission.READ_SMS' in permissions:
+        #     envs.append(SMSLogEnv())
+        #     envs.append(SMSLogEnv(sms_in=False))
+        # if 'android.permission.READ_EXTERNAL_STORAGE' in permissions \
+        #         or 'android.permission.WRITE_EXTERNAL_STORAGE' in permissions \
+        #         or 'android.permission.MOUNT_UNMOUNT_FILESYSTEMS' in permissions:
+        #     envs.append(DummyFilesEnv())
 
         # TODO add more app-specific app environment
         return envs

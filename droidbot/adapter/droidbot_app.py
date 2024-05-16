@@ -158,6 +158,7 @@ class DroidBotAppConn(Adapter):
             if acc_event_idx > 0:
                 self.logger.warning("Invalid data before packet head: " + message[:acc_event_idx])
             body = json.loads(message[acc_event_idx + len("AccEvent >>> "):])
+            # print(body)
             self.last_acc_event = body
             return
 

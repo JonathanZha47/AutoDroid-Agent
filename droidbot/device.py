@@ -279,7 +279,8 @@ class Device(object):
         etc
         :return:
         """
-        self.adb.unlock()
+        # self.adb.unlock()
+        pass
 
     def shake(self):
         """

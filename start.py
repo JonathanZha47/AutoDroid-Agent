@@ -21,7 +21,7 @@ def parse_args():
                         help="The file path to target APK")
     parser.add_argument("-o", action="store", dest="output_dir",
                         help="directory of output")
-    parser.add_argument("-task", action="store", dest="task", default="mingle around",
+    parser.add_argument("-task", action="store", dest="task", default="check the storage page",
                         help="the task to execute, in natural language")
 
     parser.add_argument("-script", action="store", dest="script_path",
