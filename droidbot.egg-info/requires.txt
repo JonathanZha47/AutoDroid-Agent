@@ -1,0 +1,12 @@
+androguard>=3.4.0a1
+networkx
+Pillow
+requests
+pyvis
+treelib
+pyyaml
+torch
+InstructorEmbedding
+sentence_transformers
+pytesseract
+openai
