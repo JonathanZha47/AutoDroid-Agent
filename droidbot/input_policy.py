@@ -932,14 +932,14 @@ class TaskPolicy(UtgBasedInputPolicy):
         if action is not None:
             self.__action_history.append(current_state.get_action_descv2(action, target_view))
             self.__thought_history.append(thought)
-            return None, action, llm_prompt, llm_response, llm_action
+            return None, action
 
         if self.__random_explore:
             self.logger.info("Trying random event.")
             action = random.choice(candidate_actions)
             self.__action_history.append(current_state.get_action_descv2(action, target_view))
             self.__thought_history.append('random trying')
-            return None, action
+            return None, action, llm_prompt, llm_response, llm_action
 
         # If couldn't find a exploration target, stop the app
         stop_app_intent = self.app.get_stop_intent()
@@ -947,7 +947,7 @@ class TaskPolicy(UtgBasedInputPolicy):
         self.__action_history.append('- stop the app')
         self.__thought_history.append("couldn't find a exploration target, stop the app")
         self.__event_trace += EVENT_FLAG_STOP_APP
-        return None, IntentEvent(intent=stop_app_intent)
+        return None, IntentEvent(intent=stop_app_intent), llm_prompt, llm_response, llm_action
     
     def _save2yaml(self, file_name, state_prompt, idx, state_str, inputs='null'):
         if not os.path.exists(file_name):
@@ -1109,7 +1109,7 @@ class TaskPolicy(UtgBasedInputPolicy):
         file_name = self.device.output_dir +'/'+ self.task.replace('"', '_').replace("'", '_') + '.yaml' #str(str(time.time()).replace('.', ''))
         idx = int(idx)
         if idx == -1:
-            return FINISHED, None, None, None
+            return FINISHED, None, None, None, None, None, None
         selected_action = candidate_actions[idx]
         
         selected_view_description = tools.get_item_properties_from_id(ui_state_desc=state_prompt, view_id=idx)
