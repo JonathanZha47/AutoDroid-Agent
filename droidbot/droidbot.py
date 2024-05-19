@@ -163,8 +163,6 @@ class DroidBot(object):
                 self.droidbox.stop()
                 self.droidbox.get_output()
             else:
-                time.sleep(10)
-                print('===========!!============')
                 self.input_manager.start()
         except KeyboardInterrupt:
             self.logger.info("Keyboard interrupt.")

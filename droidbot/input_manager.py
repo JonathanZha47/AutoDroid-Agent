@@ -115,8 +115,6 @@ class InputManager(object):
         self.logger.info("start sending events, policy is %s" % self.policy_name)
 
         try:
-            # time.sleep(10)
-            print('===========!!============')
             if self.policy is not None:
                 self.policy.start(self)
             elif self.policy_name == POLICY_NONE:

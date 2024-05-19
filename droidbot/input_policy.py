@@ -203,8 +203,15 @@ class UtgBasedInputPolicy(InputPolicy):
             tuple = self.generate_event_based_on_utg(input_manager)
             if len(tuple) == 2:
                 old_state, event = tuple
-            else:
+            elif len(tuple) == 5:
                 old_state, event, llm_prompt, llm_response, llm_action = tuple
+            else:
+                # Handle unexpected tuple sizes
+                old_state, event = tuple[0], tuple[1]
+                additional_info = tuple[2:]
+                llm_prompt = additional_info[0] if len(additional_info) > 0 else ""
+                llm_response = additional_info[1] if len(additional_info) > 1 else ""
+                llm_action = additional_info[2] if len(additional_info) > 2 else ""
             import time
             time.sleep(3)
         # update last events for humanoid
