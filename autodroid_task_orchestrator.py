@@ -22,7 +22,7 @@ def autodroid(prompt):
         # Define the output directory
         output_dir = "bench_log"
 
-        droidbot_instance = DroidBot(app_path=apk_path, device_serial=device_serial, task=task, output_dir=output_dir,env_policy=env_manager.POLICY_NONE,policy_name=input_manager.POLICY_TASK,random_input=True,event_count=10, timeout=-1, grant_perm=True, keep_app=True, keep_env=True)
+        droidbot_instance = DroidBot(app_path=apk_path, device_serial=device_serial, task=task, output_dir=output_dir,env_policy=env_manager.POLICY_NONE,policy_name=input_manager.POLICY_TASK,event_interval=20, timeout=-1, grant_perm=True, keep_app=True, keep_env=True)
 
         droidbot_instance.start()
 

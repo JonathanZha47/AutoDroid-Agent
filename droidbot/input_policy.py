@@ -928,11 +928,11 @@ class TaskPolicy(UtgBasedInputPolicy):
                 current_state=current_state, action_history=self.__action_history, thought_history=self.__thought_history, state_strs=current_state.state_str)
         
         if action == FINISHED:
-            return None, FINISHED
+            return None, FINISHED, llm_prompt, llm_response, llm_action
         if action is not None:
             self.__action_history.append(current_state.get_action_descv2(action, target_view))
             self.__thought_history.append(thought)
-            return None, action
+            return None, action, llm_prompt, llm_response, llm_action
 
         if self.__random_explore:
             self.logger.info("Trying random event.")
