@@ -92,9 +92,7 @@ class InputPolicy(object):
                 #     event = KeyEvent(name="HOME")
                 # elif self.action_count == 1 and self.master is None:
                 #     event = IntentEvent(self.app.get_start_intent())
-                orchestrator.before_one_action()
-                event, llm_prompt, llm_response, llm_action = self.generate_event(input_manager)
-                should_stop = orchestrator.after_one_action(llm_action, llm_prompt, [], llm_response)
+                event, should_stop = self.generate_event(input_manager)
                 if should_stop:
                     break
                 if event is FINISHED:
@@ -196,22 +194,8 @@ class UtgBasedInputPolicy(InputPolicy):
                 # restart script
                 event = self.script_events[0].get_transformed_event(self)
                 self.script_event_idx = 1
-        llm_prompt = ""
-        llm_response = ""
-        llm_action = ""
         if event is None:
-            tuple = self.generate_event_based_on_utg(input_manager)
-            if len(tuple) == 2:
-                old_state, event = tuple
-            elif len(tuple) == 5:
-                old_state, event, llm_prompt, llm_response, llm_action = tuple
-            else:
-                # Handle unexpected tuple sizes
-                old_state, event = tuple[0], tuple[1]
-                additional_info = tuple[2:]
-                llm_prompt = additional_info[0] if len(additional_info) > 0 else ""
-                llm_response = additional_info[1] if len(additional_info) > 1 else ""
-                llm_action = additional_info[2] if len(additional_info) > 2 else ""
+            old_state, event, should_stop = self.generate_event_based_on_utg(input_manager)
             import time
             time.sleep(3)
         # update last events for humanoid
@@ -222,7 +206,7 @@ class UtgBasedInputPolicy(InputPolicy):
 
         self.last_state = self.current_state if old_state is None else old_state
         self.last_event = event
-        return event, llm_prompt, llm_response, llm_action
+        return event, should_stop
 
     def __update_utg(self):
         self.utg.add_transition(self.last_event, self.last_state, self.current_state)
@@ -754,6 +738,7 @@ class TaskPolicy(UtgBasedInputPolicy):
         return similar_ele_path, similar_ele_desc, similar_ele
     
     def _scroll_to_top(self, scroller, all_views_for_mark, old_state=None):
+        
         prefix_scroll_event = []
         if old_state is None:
             old_state = self.current_state 
@@ -772,6 +757,7 @@ class TaskPolicy(UtgBasedInputPolicy):
                 break
 
             prefix_scroll_event.append(ScrollEvent(view=scroller, direction="UP"))
+        
         return prefix_scroll_event
 
 
@@ -780,7 +766,10 @@ class TaskPolicy(UtgBasedInputPolicy):
         generate an event based on current UTG
         @return: InputEvent
         """
-        print("called")
+        print("TaskPolicy: generate_event_based_on_utg")
+        llm_action=""
+        llm_prompt=""
+        llm_response=""
         current_state = self.current_state
         self.logger.info("Current state: %s" % current_state.state_str)
         if current_state.state_str in self.__missed_states:
@@ -856,14 +845,12 @@ class TaskPolicy(UtgBasedInputPolicy):
             # state_strs = [current_state.state_str]
             state_prompt, current_candidate_actions, current_views, _ = current_state.get_described_actions()
             all_views_for_mark = copy.deepcopy(current_views)  # just for judging whether the screen has been scrolled up to the top
-
+            orchestrator.before_one_action()
             for scrollerid in range(len(scrollable_views)):
                 scroller = scrollable_views[scrollerid]
                 # prefix_scroll_event = []
                 actions_dict[scrollerid] = []
-
                 prefix_scroll_event = self._scroll_to_top(scroller, all_views_for_mark)
-                
                 # after scrolling to the top, update the current_state
                 top_state = self.device.get_current_state()
                 state_prompt, top_candidate_actions, top_views, _ = top_state.get_described_actions()
@@ -897,7 +884,8 @@ class TaskPolicy(UtgBasedInputPolicy):
 
                     self.utg.add_transition(ScrollEvent(view=scroller, direction="DOWN"), top_state, scrolled_state)
                     top_state = scrolled_state
-                
+                should_stop = orchestrator.after_one_action("scroll","",[],"")
+            
                 # filter out the views that have been added to the whole_state by scrolling other scrollers
                 for all_view_id in range(len(all_views_without_id)):
                     view = all_views_without_id[all_view_id]
@@ -908,6 +896,7 @@ class TaskPolicy(UtgBasedInputPolicy):
                 all_views_for_mark = []
                 _ = self._scroll_to_top(scroller, all_views_for_mark, top_state)
             # print(whole_state_views)
+            orchestrator.before_one_action()
             action, candidate_actions, target_view, thought, llm_prompt, llm_response, llm_action = self._get_action_from_views_actions(
                 views=whole_state_views, candidate_actions=whole_state_actions, state_strs=whole_state_strs, action_history=self.__action_history, thought_history=self.__thought_history)
 
@@ -919,27 +908,32 @@ class TaskPolicy(UtgBasedInputPolicy):
                     # self.__action_history.append(current_state.get_action_desc(action[eventid]))
                 self.__action_history.append(current_state.get_action_descv2(action[-1], target_view))
                 self.__thought_history.append(thought)
-                return last_state, action[-1], llm_prompt, llm_response, llm_action
+                should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+                return last_state, action[-1], should_stop
             '''
             end for dealing with scrollers
             '''
         else:
+            orchestrator.before_one_action()
             action, candidate_actions, target_view, thought, llm_prompt, llm_response, llm_action = self._get_action_from_views_actions(
                 current_state=current_state, action_history=self.__action_history, thought_history=self.__thought_history, state_strs=current_state.state_str)
         
         if action == FINISHED:
-            return None, FINISHED, llm_prompt, llm_response, llm_action
+            should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+            return None, FINISHED, should_stop
         if action is not None:
             self.__action_history.append(current_state.get_action_descv2(action, target_view))
             self.__thought_history.append(thought)
-            return None, action, llm_prompt, llm_response, llm_action
+            should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+            return None, action, should_stop
 
         if self.__random_explore:
             self.logger.info("Trying random event.")
             action = random.choice(candidate_actions)
             self.__action_history.append(current_state.get_action_descv2(action, target_view))
             self.__thought_history.append('random trying')
-            return None, action, llm_prompt, llm_response, llm_action
+            should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+            return None, action, should_stop
 
         # If couldn't find a exploration target, stop the app
         stop_app_intent = self.app.get_stop_intent()
@@ -947,7 +941,8 @@ class TaskPolicy(UtgBasedInputPolicy):
         self.__action_history.append('- stop the app')
         self.__thought_history.append("couldn't find a exploration target, stop the app")
         self.__event_trace += EVENT_FLAG_STOP_APP
-        return None, IntentEvent(intent=stop_app_intent), llm_prompt, llm_response, llm_action
+        should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+        return None, IntentEvent(intent=stop_app_intent),should_stop
     
     def _save2yaml(self, file_name, state_prompt, idx, state_str, inputs='null'):
         if not os.path.exists(file_name):
