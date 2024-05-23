@@ -16,6 +16,8 @@ from .input_event import ScrollEvent
 import tools
 import pdb
 import os
+from container import orchestrator
+
 # from query_lmql import prompt_llm_with_history
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -78,6 +80,10 @@ class InputPolicy(object):
         :param input_manager: instance of InputManager
         """
         self.action_count = 0
+
+        os.system('adb shell input tap 540 20')
+        time.sleep(2)
+        
         while input_manager.enabled and self.action_count < input_manager.event_count:
             try:
                 # # make sure the first event is go to HOME screen
@@ -86,12 +92,11 @@ class InputPolicy(object):
                 #     event = KeyEvent(name="HOME")
                 # elif self.action_count == 1 and self.master is None:
                 #     event = IntentEvent(self.app.get_start_intent())
-                if self.action_count == 0 and self.master is None:
-                    event = KillAppEvent(app=self.app)
-                else:
-                    event = self.generate_event(input_manager)
-                if event == FINISHED:
+                event, should_stop = self.generate_event(input_manager)
+                if should_stop:
                     break
+                if event is FINISHED:
+                   break
                 input_manager.add_event(event)
             except KeyboardInterrupt:
                 break
@@ -189,9 +194,8 @@ class UtgBasedInputPolicy(InputPolicy):
                 # restart script
                 event = self.script_events[0].get_transformed_event(self)
                 self.script_event_idx = 1
-
         if event is None:
-            old_state, event = self.generate_event_based_on_utg(input_manager)
+            old_state, event, should_stop = self.generate_event_based_on_utg(input_manager)
             import time
             time.sleep(3)
         # update last events for humanoid
@@ -202,7 +206,7 @@ class UtgBasedInputPolicy(InputPolicy):
 
         self.last_state = self.current_state if old_state is None else old_state
         self.last_event = event
-        return event
+        return event, should_stop
 
     def __update_utg(self):
         self.utg.add_transition(self.last_event, self.last_state, self.current_state)
@@ -734,6 +738,7 @@ class TaskPolicy(UtgBasedInputPolicy):
         return similar_ele_path, similar_ele_desc, similar_ele
     
     def _scroll_to_top(self, scroller, all_views_for_mark, old_state=None):
+        
         prefix_scroll_event = []
         if old_state is None:
             old_state = self.current_state 
@@ -752,6 +757,7 @@ class TaskPolicy(UtgBasedInputPolicy):
                 break
 
             prefix_scroll_event.append(ScrollEvent(view=scroller, direction="UP"))
+        
         return prefix_scroll_event
 
 
@@ -760,65 +766,69 @@ class TaskPolicy(UtgBasedInputPolicy):
         generate an event based on current UTG
         @return: InputEvent
         """
+        print("TaskPolicy: generate_event_based_on_utg")
+        llm_action=""
+        llm_prompt=""
+        llm_response=""
         current_state = self.current_state
         self.logger.info("Current state: %s" % current_state.state_str)
         if current_state.state_str in self.__missed_states:
             self.__missed_states.remove(current_state.state_str)
 
-        if current_state.get_app_activity_depth(self.app) < 0:
-            # If the app is not in the activity stack
-            start_app_intent = self.app.get_start_intent()
+        # if current_state.get_app_activity_depth(self.app) < 0:
+        #     # If the app is not in the activity stack
+        #     start_app_intent = self.app.get_start_intent()
 
-            # It seems the app stucks at some state, has been
-            # 1) force stopped (START, STOP)
-            #    just start the app again by increasing self.__num_restarts
-            # 2) started at least once and cannot be started (START)
-            #    pass to let viewclient deal with this case
-            # 3) nothing
-            #    a normal start. clear self.__num_restarts.
+        #     # It seems the app stucks at some state, has been
+        #     # 1) force stopped (START, STOP)
+        #     #    just start the app again by increasing self.__num_restarts
+        #     # 2) started at least once and cannot be started (START)
+        #     #    pass to let viewclient deal with this case
+        #     # 3) nothing
+        #     #    a normal start. clear self.__num_restarts.
 
-            if self.__event_trace.endswith(EVENT_FLAG_START_APP + EVENT_FLAG_STOP_APP) \
-                    or self.__event_trace.endswith(EVENT_FLAG_START_APP):
-                self.__num_restarts += 1
-                self.logger.info("The app had been restarted %d times.", self.__num_restarts)
-            else:
-                self.__num_restarts = 0
+        #     if self.__event_trace.endswith(EVENT_FLAG_START_APP + EVENT_FLAG_STOP_APP) \
+        #             or self.__event_trace.endswith(EVENT_FLAG_START_APP):
+        #         self.__num_restarts += 1
+        #         self.logger.info("The app had been restarted %d times.", self.__num_restarts)
+        #     else:
+        #         self.__num_restarts = 0
 
-            # pass (START) through
-            if not self.__event_trace.endswith(EVENT_FLAG_START_APP):
-                if self.__num_restarts > MAX_NUM_RESTARTS:
-                    # If the app had been restarted too many times, enter random mode
-                    msg = "The app had been restarted too many times. Entering random mode."
-                    self.logger.info(msg)
-                    self.__random_explore = True
-                else:
-                    # Start the app
-                    self.__event_trace += EVENT_FLAG_START_APP
-                    self.logger.info("Trying to start the app...")
-                    # self.__action_history = [f'- start the app {self.app.app_name}']
-                    self.__action_history = [f'- launchApp {self.app.app_name}']
-                    self.__thought_history = [f'launch the app {self.app.app_name} to finish the task {self.task}']
-                    return None, IntentEvent(intent=start_app_intent)
+        #     # pass (START) through
+        #     if not self.__event_trace.endswith(EVENT_FLAG_START_APP):
+        #         if self.__num_restarts > MAX_NUM_RESTARTS:
+        #             # If the app had been restarted too many times, enter random mode
+        #             msg = "The app had been restarted too many times. Entering random mode."
+        #             self.logger.info(msg)
+        #             self.__random_explore = True
+        #         else:
+        #             # Start the app
+        #             self.__event_trace += EVENT_FLAG_START_APP
+        #             self.logger.info("Trying to start the app...")
+        #             # self.__action_history = [f'- start the app {self.app.app_name}']
+        #             self.__action_history = [f'- launchApp {self.app.app_name}']
+        #             self.__thought_history = [f'launch the app {self.app.app_name} to finish the task {self.task}']
+        #             return None, IntentEvent(intent=start_app_intent)
 
-        elif current_state.get_app_activity_depth(self.app) > 0:
+        # elif current_state.get_app_activity_depth(self.app) > 0:
             # If the app is in activity stack but is not in foreground
-            self.__num_steps_outside += 1
+        self.__num_steps_outside += 1
 
-            if self.__num_steps_outside > MAX_NUM_STEPS_OUTSIDE:
-                # If the app has not been in foreground for too long, try to go back
-                if self.__num_steps_outside > MAX_NUM_STEPS_OUTSIDE_KILL:
-                    stop_app_intent = self.app.get_stop_intent()
-                    go_back_event = IntentEvent(stop_app_intent)
-                else:
-                    go_back_event = KeyEvent(name="BACK")
-                self.__event_trace += EVENT_FLAG_NAVIGATE
-                self.logger.info("Going back to the app...")
-                self.__action_history.append('- go back')
-                self.__thought_history.append('the app has not been in foreground for too long, try to go back')
-                return None, go_back_event
-        else:
-            # If the app is in foreground
-            self.__num_steps_outside = 0
+        if self.__num_steps_outside > MAX_NUM_STEPS_OUTSIDE:
+            # If the app has not been in foreground for too long, try to go back
+            if self.__num_steps_outside > MAX_NUM_STEPS_OUTSIDE_KILL:
+                stop_app_intent = self.app.get_stop_intent()
+                go_back_event = IntentEvent(stop_app_intent)
+            else:
+                go_back_event = KeyEvent(name="BACK")
+            self.__event_trace += EVENT_FLAG_NAVIGATE
+            self.logger.info("Going back to the app...")
+            self.__action_history.append('- go back')
+            self.__thought_history.append('the app has not been in foreground for too long, try to go back')
+            return None, go_back_event
+        # else:
+        #     # If the app is in foreground
+        #     self.__num_steps_outside = 0
         
         
         scrollable_views = current_state.get_scrollable_views()#self._get_scrollable_views(current_state)
@@ -835,14 +845,12 @@ class TaskPolicy(UtgBasedInputPolicy):
             # state_strs = [current_state.state_str]
             state_prompt, current_candidate_actions, current_views, _ = current_state.get_described_actions()
             all_views_for_mark = copy.deepcopy(current_views)  # just for judging whether the screen has been scrolled up to the top
-
+            orchestrator.before_one_action()
             for scrollerid in range(len(scrollable_views)):
                 scroller = scrollable_views[scrollerid]
                 # prefix_scroll_event = []
                 actions_dict[scrollerid] = []
-
                 prefix_scroll_event = self._scroll_to_top(scroller, all_views_for_mark)
-                
                 # after scrolling to the top, update the current_state
                 top_state = self.device.get_current_state()
                 state_prompt, top_candidate_actions, top_views, _ = top_state.get_described_actions()
@@ -876,7 +884,8 @@ class TaskPolicy(UtgBasedInputPolicy):
 
                     self.utg.add_transition(ScrollEvent(view=scroller, direction="DOWN"), top_state, scrolled_state)
                     top_state = scrolled_state
-                
+                should_stop = orchestrator.after_one_action("scroll","",[],"")
+            
                 # filter out the views that have been added to the whole_state by scrolling other scrollers
                 for all_view_id in range(len(all_views_without_id)):
                     view = all_views_without_id[all_view_id]
@@ -887,7 +896,8 @@ class TaskPolicy(UtgBasedInputPolicy):
                 all_views_for_mark = []
                 _ = self._scroll_to_top(scroller, all_views_for_mark, top_state)
             # print(whole_state_views)
-            action, candidate_actions, target_view, thought = self._get_action_from_views_actions(
+            orchestrator.before_one_action()
+            action, candidate_actions, target_view, thought, llm_prompt, llm_response, llm_action = self._get_action_from_views_actions(
                 views=whole_state_views, candidate_actions=whole_state_actions, state_strs=whole_state_strs, action_history=self.__action_history, thought_history=self.__thought_history)
 
             if isinstance(action, list):  # the screen has to be scrolled first
@@ -898,27 +908,32 @@ class TaskPolicy(UtgBasedInputPolicy):
                     # self.__action_history.append(current_state.get_action_desc(action[eventid]))
                 self.__action_history.append(current_state.get_action_descv2(action[-1], target_view))
                 self.__thought_history.append(thought)
-                return last_state, action[-1]
+                should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+                return last_state, action[-1], should_stop
             '''
             end for dealing with scrollers
             '''
         else:
-            action, candidate_actions, target_view, thought = self._get_action_from_views_actions(
+            orchestrator.before_one_action()
+            action, candidate_actions, target_view, thought, llm_prompt, llm_response, llm_action = self._get_action_from_views_actions(
                 current_state=current_state, action_history=self.__action_history, thought_history=self.__thought_history, state_strs=current_state.state_str)
         
         if action == FINISHED:
-            return None, FINISHED
+            should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+            return None, FINISHED, should_stop
         if action is not None:
             self.__action_history.append(current_state.get_action_descv2(action, target_view))
             self.__thought_history.append(thought)
-            return None, action
+            should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+            return None, action, should_stop
 
         if self.__random_explore:
             self.logger.info("Trying random event.")
             action = random.choice(candidate_actions)
             self.__action_history.append(current_state.get_action_descv2(action, target_view))
             self.__thought_history.append('random trying')
-            return None, action
+            should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+            return None, action, should_stop
 
         # If couldn't find a exploration target, stop the app
         stop_app_intent = self.app.get_stop_intent()
@@ -926,7 +941,8 @@ class TaskPolicy(UtgBasedInputPolicy):
         self.__action_history.append('- stop the app')
         self.__thought_history.append("couldn't find a exploration target, stop the app")
         self.__event_trace += EVENT_FLAG_STOP_APP
-        return None, IntentEvent(intent=stop_app_intent)
+        should_stop = orchestrator.after_one_action(llm_action,llm_prompt,[],llm_response)
+        return None, IntentEvent(intent=stop_app_intent),should_stop
     
     def _save2yaml(self, file_name, state_prompt, idx, state_str, inputs='null'):
         if not os.path.exists(file_name):
@@ -1088,7 +1104,7 @@ class TaskPolicy(UtgBasedInputPolicy):
         file_name = self.device.output_dir +'/'+ self.task.replace('"', '_').replace("'", '_') + '.yaml' #str(str(time.time()).replace('.', ''))
         idx = int(idx)
         if idx == -1:
-            return FINISHED, None, None, None
+            return FINISHED, None, None, None, None, None, None
         selected_action = candidate_actions[idx]
         
         selected_view_description = tools.get_item_properties_from_id(ui_state_desc=state_prompt, view_id=idx)
@@ -1104,7 +1120,7 @@ class TaskPolicy(UtgBasedInputPolicy):
             self._save2yaml(file_name, state_prompt, idx, state_strs, inputs=selected_action.text)
         else:
             self._save2yaml(file_name, state_prompt, idx, state_strs, inputs='null')
-        return selected_action, candidate_actions, selected_view_description, thought
+        return selected_action, candidate_actions, selected_view_description, thought, response, prompt, action_type
 
     def _insert_predictions_into_state_prompt(self, state_prompt, current_state_item_descriptions):
         state_prompt_list = state_prompt.split('>\n')

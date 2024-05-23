@@ -65,6 +65,8 @@ class QEMUConn(Adapter):
         return bytes(string, encoding="utf-8")
 
     def connect(self, from_snapshot=False):
+        print("connect")
+        exit(1)
         # 1. Connect to QMP
         self.qemu_tel = telnetlib.Telnet(host=self.domain, port=self.telnet_port)
         self.logger.info(self.qemu_tel.read_until(self.utf8bytes("\r\n")))

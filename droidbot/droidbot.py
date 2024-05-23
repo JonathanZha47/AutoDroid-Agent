@@ -13,6 +13,7 @@ from .device import Device
 from .app import App
 from .env_manager import AppEnvManager
 from .input_manager import InputManager
+import time
 
 
 class DroidBot(object):
@@ -33,7 +34,7 @@ class DroidBot(object):
                  random_input=False,
                  script_path=None,
                  event_count=None,
-                 event_interval=None,
+                 event_interval=1,
                  timeout=None,
                  keep_app=None,
                  keep_env=False,
@@ -147,7 +148,7 @@ class DroidBot(object):
 
             if not self.enabled:
                 return
-            self.device.install_app(self.app)
+           # self.device.install_app(self.app) #comment out
 
             if not self.enabled:
                 return
